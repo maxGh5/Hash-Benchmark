@@ -1,163 +1,219 @@
 import os
+import platform
 import time
-import hashlib
+import psutil
 import threading
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import csv
+import shutil
+
+try:
+    import GPUtil  # Zum Erkennen echter GPUs
+except ImportError:
+    GPUtil = None
+
+# Farbverlauf-Generator für RGB-Farben
+def rgb_color(r, g, b):
+    return f"\033[38;2;{r};{g};{b}m"
+
+RESET = "\033[0m"
+
+# Farben
+CYAN = rgb_color(0, 255, 255)
+GREEN = rgb_color(0, 255, 0)
+YELLOW = rgb_color(255, 255, 0)
+RED = rgb_color(255, 0, 0)
+BLUE = rgb_color(0, 0, 255)
+
+# Unterstützte CPU-Algorithmen
+CPU_ALGORITHMS = ["sha256", "sha512", "blake2b", "sha3_256", "md5"]
+
+# GPU-Unterstützung
+def detect_gpus():
+    """Erkennt verfügbare GPUs mit GPUtil."""
+    if GPUtil is None:
+        return []
+    gpus = GPUtil.getGPUs()
+    return [gpu.name for gpu in gpus]
+
+GPU_LIST = detect_gpus()
+GPU_ALGORITHMS = ["cuda_sha256", "cuda_sha512"] if GPU_LIST else []
 
 # Globale Variablen
 progress = 0
-stop_animation = False
+progress_lock = threading.Lock()
+stop_animation = threading.Event()
 
-# Unterstützte CPU-Algorithmen
-CPU_ALGORITHMS = ["sha256", "sha512", "blake2b"]
+def display_startup_message():
+    """Zeigt die Startnachricht mit Farben und Rahmen."""
+    text = "🌟 Multi-Algorithm Hash Benchmark 🌟"
+    terminal_width = shutil.get_terminal_size().columns
+    border = "═" * (len(text) + 4)
+    padding = (terminal_width - len(border)) // 2
 
-def display_ascii_menu():
-    """Zeigt das farbige ASCII-Hauptmenü an und gibt die Benutzerauswahl zurück."""
-    print("\n")
-    print("\033[94m╔════════════════════════════════════════╗")
-    print("║     🌟 \033[96mMulti-Algorithm Hash Benchmark\033[94m 🌟    ║")
-    print("╚════════════════════════════════════════╝")
-    print("\033[93m1️⃣  Set Benchmark Duration (in seconds)")
-    print("2️⃣  Choose Hash Algorithm (SHA256/SHA512/Blake2b)")
-    print("3️⃣  Set Number of Threads")
-    print("4️⃣  🚀 Start Single Algorithm Benchmark")
-    print("5️⃣  🌍 Start Multi-Algorithm Benchmark")
-    print("6️⃣  ❌ Exit")
-    print("\033[94m══════════════════════════════════════════\033[0m")
-    return input("\033[96m👉 Please choose an option (1-6): \033[0m")
+    for _ in range(3):  # Animation für 3 Wiederholungen
+        os.system("cls" if platform.system() == "Windows" else "clear")
+        print(f"{CYAN}{' ' * padding}╔{border}╗{RESET}")
+        print(f"{CYAN}{' ' * padding}║  {text}  ║{RESET}")
+        print(f"{CYAN}{' ' * padding}╚{border}╝{RESET}")
+        time.sleep(0.5)
 
-def get_input_ascii(prompt, default_value):
-    """Nimmt eine Eingabe vom Benutzer entgegen und gibt den Standardwert zurück, falls keine Eingabe erfolgt."""
-    user_input = input(f"{prompt} (Default: {default_value}): ")
-    return user_input if user_input else default_value
+def print_normal_border(text):
+    """Zeigt den Text mit einem normalen Rahmen an."""
+    terminal_width = shutil.get_terminal_size().columns
+    border = "═" * (len(text) + 4)
+    padding = (terminal_width - len(border)) // 2
+
+    print(f"{GREEN}{' ' * padding}╔{border}╗{RESET}")
+    print(f"{GREEN}{' ' * padding}║  {text}  ║{RESET}")
+    print(f"{GREEN}{' ' * padding}╚{border}╝{RESET}")
 
 def print_progress_bar(total_duration, start_time):
-    """Zeigt eine farbige ASCII-Progress-Bar an, die den Fortschritt des Benchmarks verfolgt."""
-    while not stop_animation:
-        elapsed_time = time.time() - start_time
+    """Zeigt eine farbige Fortschrittsanzeige an."""
+    bar_length = 50
+    while not stop_animation.is_set():
+        elapsed_time = time.perf_counter() - start_time
         progress_percentage = min(100, int((elapsed_time / total_duration) * 100))
-        bar_length = 30  # Länge der Progress-Bar
         filled_length = int(bar_length * progress_percentage // 100)
-        bar = '\033[92m' + '█' * filled_length + '\033[91m' + '-' * (bar_length - filled_length) + '\033[0m'
-        print(f"\r\033[93mProgress: |{bar}| {progress_percentage}% Complete\033[0m", end="", flush=True)
-        time.sleep(0.2)
+        bar = f"{GREEN}{'█' * filled_length}{RESET}{'-' * (bar_length - filled_length)}"
+        print(f"\r{CYAN}Progress: |{bar}| {progress_percentage}% Complete{RESET}", end="", flush=True)
+        time.sleep(0.1)
+    print("\n")
 
 def format_hashrate(hashrate):
-    """Formatiert die Hashrate in eine geeignete Einheit (H/s, kH/s, MH/s, etc.)."""
-    units = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s", "EH/s"]
+    """Formatiert die Hashrate in eine geeignete Einheit."""
+    units = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s"]
     power = 0
     while hashrate >= 1000 and power < len(units) - 1:
         hashrate /= 1000
         power += 1
     return f"{hashrate:.2f} {units[power]}"
 
-def display_results(results):
-    """Zeigt die Benchmark-Ergebnisse übersichtlich in mehreren Zeilen an."""
-    print("\n\033[96m✨ Benchmark Results ✨\033[0m\n")
-    headers = ["Algorithm", "Duration", "Hashes", "Hashrate"]
-    row_format = "{:<15} {:<15} {:<15} {:<15}"  # Formatierung der Tabelle
+def show_system_info():
+    """Zeigt Informationen über das System an."""
+    gpu_info = ", ".join(GPU_LIST) if GPU_LIST else "No GPU detected"
+    system_info = (
+        f"{YELLOW}Operating System:{RESET} {platform.system()} {platform.release()} ({platform.version()})\n"
+        f"{YELLOW}CPU:{RESET} {platform.processor()}\n"
+        f"{YELLOW}CPU Cores:{RESET} {os.cpu_count()}\n"
+        f"{YELLOW}Python Version:{RESET} {platform.python_version()}\n"
+        f"{YELLOW}Total Memory:{RESET} {psutil.virtual_memory().total / (1024 ** 3):.2f} GB\n"
+        f"{YELLOW}GPU(s):{RESET} {gpu_info}"
+    )
+    print_normal_border("System Information")
+    print(system_info)
 
-    # Tabellenkopf
-    print("\033[94m" + row_format.format(*headers) + "\033[0m")
-    print("\033[94m" + "-" * 60 + "\033[0m")
-
-    # Ergebnisse zeilenweise ausgeben
-    for result in results:
-        row = row_format.format(
-            result["algorithm"],
-            result["duration"],
-            result["hashes"],
-            result["hashrate"]
-        )
-        print(row)
-    print("\n")
+def display_ascii_menu():
+    """Zeigt das Hauptmenü an."""
+    menu = f"""
+    {CYAN}🌟 Main Menu 🌟{RESET}
+    {YELLOW}1️⃣  Set Benchmark Duration
+    2️⃣  Choose Hash Algorithm
+    3️⃣  Set Number of Threads
+    4️⃣  🚀 Start Single Algorithm Benchmark
+    5️⃣  🌍 Start Multi-Algorithm Benchmark
+    6️⃣  📊 Show Benchmark History
+    7️⃣  💻 Show System Info
+    8️⃣  ❌ Exit{RESET}
+    """
+    print(menu)
 
 def hash_worker(duration, algorithm="sha256"):
     """Berechnet Hashes für die angegebene Zeit."""
     global progress
-    start_time = time.time()
-    
-    hasher = getattr(hashlib, algorithm)
-    while time.time() - start_time < duration:
-        data = str(progress).encode()
-        hasher(data).hexdigest()
-        progress += 1
+    start_time = time.perf_counter()
+    hasher = getattr(hashlib, algorithm)()
+    local_progress = 0
+    data = b"0" * 4096
+
+    while time.perf_counter() - start_time < duration:
+        hasher.update(data)
+        hasher.digest()
+        local_progress += 1
+
+    with progress_lock:
+        progress += local_progress
 
 def run_benchmark(algorithm, duration=20, threads=None):
-    """Startet den Benchmark für einen bestimmten Algorithmus."""
+    """Startet einen Benchmark für einen Algorithmus."""
     global progress, stop_animation
     progress = 0
-    stop_animation = False
+    stop_animation.clear()
 
     if threads is None:
         threads = os.cpu_count()
 
-    # Starte die Progress-Bar in einem separaten Thread
-    start_time = time.time()
+    start_time = time.perf_counter()
     progress_thread = threading.Thread(target=print_progress_bar, args=(duration, start_time))
     progress_thread.start()
 
-    print(f"\n\033[94m🏁 Benchmark started for Algorithm: {algorithm} ({threads} Threads) 🏁\033[0m")
-
+    print_normal_border(f"Benchmark: {algorithm.upper()} ({threads} Threads)")
     with ThreadPoolExecutor(max_workers=threads) as executor:
         futures = [executor.submit(hash_worker, duration, algorithm) for _ in range(threads)]
         for future in as_completed(futures):
-            pass
+            future.result()
 
-    elapsed = time.time() - start_time
-    hashrate = progress / elapsed
-    stop_animation = True  # Stoppe die Progress-Bar nach Abschluss des Benchmarks
-    progress_thread.join()  # Warten, bis der Progress-Thread beendet ist
+    elapsed = time.perf_counter() - start_time
+    hashrate = format_hashrate(progress / elapsed)
+    stop_animation.set()
+    progress_thread.join()
 
-    results = {
-        "algorithm": algorithm,
-        "duration": f"{elapsed:.2f} seconds",
-        "hashes": progress,
-        "hashrate": format_hashrate(progress / elapsed)
+    return {
+        "Algorithm": algorithm.upper(),
+        "Duration": f"{elapsed:.2f} seconds",
+        "Total Hashes": progress,
+        "Hashrate": hashrate
     }
 
-    return results
-
 def run_multi_algorithm_benchmark():
-    """Startet den Multi-Algorithm Benchmark für die unterstützten CPU-Algorithmen."""
+    """Startet einen Benchmark für alle unterstützten Algorithmen."""
     results = []
+    all_algorithms = CPU_ALGORITHMS + GPU_ALGORITHMS
+    for algorithm in all_algorithms:
+        result = run_benchmark(algorithm)
+        results.append(result)
 
-    print("\033[92m🖥️ Running CPU benchmarks...\033[0m")
-    for algorithm in CPU_ALGORITHMS:
-        results.append(run_benchmark(algorithm, duration=20, threads=os.cpu_count()))
+    print_normal_border("Benchmark Results")
+    for res in results:
+        print(f"{YELLOW}{res}{RESET}")
 
-    display_results(results)
+def main():
+    """Hauptfunktion des Programms."""
+    display_startup_message()  # Zeigt die Startanimation
 
-if __name__ == "__main__":
-    # Standardwerte
-    duration = 20  # Standarddauer für jeden Benchmark in Sekunden
-    algorithm = "sha256"  # Standardalgorithmus
-    threads = os.cpu_count()  # Automatische Erkennung der optimalen Anzahl von CPU-Kernen
+    benchmark_duration = 20
+    selected_algorithm = "sha256"
+    number_of_threads = os.cpu_count()
 
     while True:
-        choice = display_ascii_menu()
+        display_ascii_menu()
+        choice = input(f"{BLUE}👉 Please choose an option (1-8): {RESET}")
 
         if choice == "1":
-            duration = int(get_input_ascii("⏳ Enter benchmark duration (in seconds)", duration))
+            benchmark_duration = int(input("Enter benchmark duration (seconds): "))
         elif choice == "2":
-            algorithm = get_input_ascii("🔑 Choose hash algorithm (sha256/sha512/blake2b)", algorithm).lower()
-            if algorithm not in CPU_ALGORITHMS:
-                print("\033[91m❌ Invalid algorithm selected. Default (sha256) will be used.\033[0m")
-                algorithm = "sha256"
+            all_algorithms = CPU_ALGORITHMS + GPU_ALGORITHMS
+            selected_algorithm = input(f"Enter hash algorithm ({', '.join(all_algorithms)}): ").lower()
+            if selected_algorithm not in all_algorithms:
+                print(f"{RED}Invalid algorithm! Defaulting to sha256.{RESET}")
+                selected_algorithm = "sha256"
         elif choice == "3":
-            threads = int(get_input_ascii("🔧 Enter the number of threads", threads))
-            if threads <= 0:
-                print("\033[91m❌ Invalid number of threads. Default will be used.\033[0m")
-                threads = os.cpu_count()
+            number_of_threads = int(input("Enter number of threads: "))
         elif choice == "4":
-            # Einzelner Algorithmus-Benchmark
-            results = [run_benchmark(algorithm, duration, threads)]
-            display_results(results)
+            result = run_benchmark(selected_algorithm, benchmark_duration, number_of_threads)
+            print(f"{GREEN}Result:{RESET} {result}")
         elif choice == "5":
-            # Multi-Algorithmus Benchmark
             run_multi_algorithm_benchmark()
         elif choice == "6":
-            print("\033[91m👋 Exiting program. Goodbye!\033[0m")
+            print("Feature coming soon.")
+        elif choice == "7":
+            show_system_info()
+        elif choice == "8":
+            print_normal_border("Goodbye!")
             break
         else:
-            print("\033[91m❌ Invalid choice. Please try again.\033[0m")
+            print(f"{RED}Invalid choice! Please select a valid option.{RESET}")
+
+if __name__ == "__main__":
+    main()
