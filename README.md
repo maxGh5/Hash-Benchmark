@@ -1,104 +1,138 @@
-# Multi-Algorithm Hash Benchmark
+THIS PROJEKT IS NOT FINISHED!!!
 
-🌟 **Multi-Algorithm Hash Benchmark** is a tool designed to measure your CPU’s performance when computing hashes using various algorithms.  
-It supports **SHA-256**, **SHA-512**, and **Blake2b** and allows benchmarking for single or multiple algorithms.
+
+🌟 Multi-Algorithm Hash Benchmark 🌟
+
+A powerful tool to benchmark various hashing algorithms on both CPU and GPU! It automatically detects available system resources (CPU cores and GPUs) and utilizes them efficiently to compute and analyze hash rates.
+
 
 ---
 
-## 🔧 Features
+🚀 Features
 
-- **Supported Algorithms:**
-  - SHA-256
-  - SHA-512
-  - Blake2b
-- **Customizable Settings:**
-  - Benchmark duration
-  - Number of threads
-  - Algorithm selection
-- **Multi-Algorithm Benchmark:** Run benchmarks for all supported algorithms sequentially.
-- **Progress Bar:** Visual representation of the benchmark progress.
-- **Result Display:** Results are shown in a clear table format.
+Supported Algorithms:
+
+CPU: sha256, sha512, blake2b, sha3_256, md5
+
+GPU (if available): cuda_sha256, cuda_sha512
+
+
+Automatic Thread Detection:
+
+Automatically optimizes the number of threads based on available CPU cores and GPU capabilities.
+
+
+System Information:
+
+Displays detailed information about the operating system, CPU, RAM, and available GPUs.
+
+
+Progress Bar:
+
+An animated progress bar during benchmarks for better visualization.
+
+
+Colorful Layout:
+
+A user-friendly interface with colorful frames and emojis.
+
+
+Multi-Algorithm Benchmarking:
+
+Tests multiple algorithms automatically and displays detailed results.
+
+
+
 
 ---
 
-## 🚀 Installation
+📋 Requirements
 
-### 1. Install Python
-Download and install Python 3.6 or higher from [python.org](https://www.python.org/downloads/).  
-Make sure to enable the **"Add Python to PATH"** option during installation.
-
-### 2. Clone the Project
-
-git clone https://github.com/username/multi_algorithm_benchmark.git
-cd multi_algorithm_benchmark
-
-3. Install Dependencies
-The tool works with Python's standard library, so no additional dependencies are required.
-
-Optional: Install colorama for enhanced color display on Windows:
-
-pip install colorama
-
-🏁 Usage
-1. Start the Benchmark
-Run the script:
-
-python benchmark.py
-
-2. Main Menu
-The tool offers several options to choose from:
-
-1️⃣ Set Benchmark Duration: Set the benchmark duration in seconds.
-2️⃣ Choose Hash Algorithm: Select one of the supported algorithms (SHA-256, SHA-512, Blake2b).
-3️⃣ Set Number of Threads: Manually adjust the number of CPU threads.
-4️⃣ Start Single Algorithm Benchmark: Run the benchmark for the selected algorithm.
-5️⃣ Start Multi-Algorithm Benchmark: Benchmark all supported algorithms sequentially.
-6️⃣ Exit: Quit the program.
-3. Results
-The results are displayed in a clear table format, such as:
-
-Algorithm	Duration	Hashes	Hashrate
-SHA-256	20.00 seconds	500000	25.00 MH/s
-SHA-512	20.00 seconds	300000	15.00 MH/s
-Blake2b	20.00 seconds	400000	20.00 MH/s
+1. Python Version: Python 3.7 or higher
 
 
-🖥️ Example Output
+2. Dependencies:
 
-🏁 Benchmark started for Algorithm: sha256 (8 Threads)
+Install the required libraries using:
 
-Progress: |██████████████----------------| 50% Complete
-
-✨ Benchmark Results ✨
-
-Algorithm       Duration        Hashes          Hashrate        
-------------------------------------------------------------
-SHA-256         20.00 seconds  500000          25.00 MH/s      
-SHA-512         20.00 seconds  300000          15.00 MH/s      
-Blake2b         20.00 seconds  400000          20.00 MH/s
+pip install psutil GPUtil
 
 
-📂 Project Structure
-
-multi_algorithm_benchmark/
-│
-├── benchmark.py          # Main script
-├── requirements.txt      # Optional dependencies
-└── README.md             # Project documentation
 
 
-🛠️ Requirements
-Python 3.6 or higher
-Operating Systems:
-Windows, Linux, macOS
-Optional: colorama for enhanced terminal color support
-💡 Future Enhancements
-Add more hashing algorithms.
-GPU support for selected algorithms.
-Advanced statistics and visualizations for benchmarking results.
+
+---
+
+📂 Installation
+
+1. Clone this
+
+2. Install dependencies:
+
+pip install -r requirements.txt
 
 
-THIS PROJECT IS UNFINISHED!!!
 
+---
+
+🖥️ Usage
+
+1. Run the program:
+
+python Benchmark.py
+
+
+2. Follow the on-screen menu:
+
+Set Benchmark Duration: Configure the time for the benchmark in seconds.
+
+Choose Hash Algorithm: Select from supported algorithms.
+
+Start Single Algorithm Benchmark: Run a benchmark for a specific algorithm.
+
+Start Multi-Algorithm Benchmark: Run benchmarks for all available algorithms.
+
+Show Benchmark History: View previous results.
+
+Show System Info: Display system hardware information.
+
+Exit: Exit the program.
+
+
+
+
+---
+
+🧪 Example Output
+
+System Information
+
+Operating System: Windows 10 (10.0.22631)
+CPU: Intel Core i9-12900K
+CPU Cores: 24
+Python Version: 3.10.9
+Total Memory: 32.0 GB
+GPU(s): NVIDIA GeForce RTX 3080
+
+Benchmark Results
+
+Algorithm: SHA256
+Duration: 20.00 seconds
+Total Hashes: 12,345,678
+Hashrate: 617.28 MH/s
+
+
+---
+
+📜 License
+
+This project is licensed under the MIT License.
+
+
+---
+
+💡 Contributions
+
+Contributions are welcome! Feel free to fork this repository, submit pull requests, or open issues to improve the project.
 
 
