@@ -1,138 +1,110 @@
-THIS PROJEKT IS NOT FINISHED!!!
+# Hashing Benchmark with Easter Egg Cracker
 
-
-🌟 Multi-Algorithm Hash Benchmark 🌟
-
-A powerful tool to benchmark various hashing algorithms on both CPU and GPU! It automatically detects available system resources (CPU cores and GPUs) and utilizes them efficiently to compute and analyze hash rates.
-
+Welcome to the **Hashing Benchmark Tool**! This fun project allows you to test your computer's hashing performance, compare the results with real-world distances, and discover a hidden Easter Egg by cracking its MD5 hash.
 
 ---
 
-🚀 Features
+## Features
 
-Supported Algorithms:
+- **Hashing Benchmark:**
+  - Measure how many hashes your computer can compute in a set duration using algorithms like MD5, SHA1, SHA256, or SHA512.
+  - Results are compared to real-world distances (e.g., "If each hash was 1 meter, you traveled X kilometers").
 
-CPU: sha256, sha512, blake2b, sha3_256, md5
+- **Easter Egg Challenge:**
+  - Guess the 6-character uppercase password for the hidden Easter Egg.
+  - Use manual guessing or an automatic dictionary attack.
 
-GPU (if available): cuda_sha256, cuda_sha512
+- **Fun Facts:**
+  - Learn random fun facts about hashing, cryptography, and computing.
 
-
-Automatic Thread Detection:
-
-Automatically optimizes the number of threads based on available CPU cores and GPU capabilities.
-
-
-System Information:
-
-Displays detailed information about the operating system, CPU, RAM, and available GPUs.
-
-
-Progress Bar:
-
-An animated progress bar during benchmarks for better visualization.
-
-
-Colorful Layout:
-
-A user-friendly interface with colorful frames and emojis.
-
-
-Multi-Algorithm Benchmarking:
-
-Tests multiple algorithms automatically and displays detailed results.
-
-
-
+- **Settings Menu:**
+  - Customize the benchmark duration and hashing algorithm.
 
 ---
 
-📋 Requirements
+## Getting Started
 
-1. Python Version: Python 3.7 or higher
+### Requirements
 
+- Python 3.x
 
-2. Dependencies:
+No additional libraries are required as the script uses only Python's built-in modules.
 
-Install the required libraries using:
+### Running the Script
 
-pip install psutil GPUtil
+1. Clone or download the repository.
+2. Open a terminal and navigate to the project directory.
+3. Run the script using:
+   ```bash
+   python3 benchmark.py
+   ```
 
+### Menu Options
 
-
-
-
----
-
-📂 Installation
-
-1. Clone this
-
-2. Install dependencies:
-
-pip install -r requirements.txt
-
-
-
----
-
-🖥️ Usage
-
-1. Run the program:
-
-python Benchmark.py
-
-
-2. Follow the on-screen menu:
-
-Set Benchmark Duration: Configure the time for the benchmark in seconds.
-
-Choose Hash Algorithm: Select from supported algorithms.
-
-Start Single Algorithm Benchmark: Run a benchmark for a specific algorithm.
-
-Start Multi-Algorithm Benchmark: Run benchmarks for all available algorithms.
-
-Show Benchmark History: View previous results.
-
-Show System Info: Display system hardware information.
-
-Exit: Exit the program.
-
-
-
+- **1) Start Hash Benchmark:** Run the benchmark and see how many hashes your PC can compute.
+- **2) Show Fun Fact:** Learn something fun about hashing or computing.
+- **3) System Info:** View details about your system and Python environment.
+- **4) Settings:** Adjust the benchmark duration or hashing algorithm.
+- **5) Crack Easter Egg:** Try to guess or crack the Easter Egg password.
+- **6) Exit:** Quit the program.
 
 ---
 
-🧪 Example Output
+## Easter Egg Challenge
 
-System Information
+The Easter Egg is hidden behind an MD5 hash. You can access it in two ways:
 
-Operating System: Windows 10 (10.0.22631)
-CPU: Intel Core i9-12900K
-CPU Cores: 24
-Python Version: 3.10.9
-Total Memory: 32.0 GB
-GPU(s): NVIDIA GeForce RTX 3080
-
-Benchmark Results
-
-Algorithm: SHA256
-Duration: 20.00 seconds
-Total Hashes: 12,345,678
-Hashrate: 617.28 MH/s
-
+1. **Manual Guess:** Enter your guess for the 6-character password. Hint: It is a word often associated with a holiday.
+2. **Dictionary Attack:** Use the built-in dictionary to automatically find the password.
 
 ---
 
-📜 License
+## Customization
 
-This project is licensed under the MIT License.
+Feel free to customize the script to suit your preferences:
 
+- **Add More Algorithms:** Extend the `ALGO_FUNCTIONS` dictionary with additional hashing algorithms.
+- **Expand the Dictionary:** Add more words to the `DICTIONARY` list for the dictionary attack.
+- **Update Distances:** Modify or add entries in the `DISTANCE_REFERENCES` list for comparison.
+- **Change the Easter Egg:** Replace the `EASTER_EGG_HASH` with a new MD5 hash and adjust the hints.
 
 ---
 
-💡 Contributions
+## Example Output
 
-Contributions are welcome! Feel free to fork this repository, submit pull requests, or open issues to improve the project.
+```plaintext
+╔════════════════════════════════════════╗
+║               MAIN MENU               ║
+╠════════════════════════════════════════╣
+║ 1) Start Hash Benchmark  ⚙️           ║
+║ 2) Show Fun Fact         🤯           ║
+║ 3) System Info           💻           ║
+║ 4) Settings              ⚒️           ║
+║ 5) Crack Easter Egg      🥚           ║
+║ 6) Exit                  🚪           ║
+╚════════════════════════════════════════╝
 
+Select an option: 1
+Starting SHA256 hash benchmark for 3 second(s)... ⚙️⏱️
+Completed 300,000 SHA256 hashes in 3.00 seconds.
+That’s about 100,000 hashes per second!
+
+If each hash was 1 meter, you traveled 300.00 km.
+You've gone beyond:
+ - the height of the ISS orbit (~400 km)
+
+---
+```
+
+---
+
+## License
+
+This project is open-source and available under the MIT License. Feel free to modify and share it!
+
+---
+
+## Contributing
+
+If you have suggestions for improvements or additional features, feel free to fork the repository and submit a pull request.
 
