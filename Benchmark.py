@@ -1,219 +1,343 @@
-import os
-import platform
-import time
-import psutil
-import threading
+#!/usr/bin/env python3
+
 import hashlib
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import csv
-import shutil
+import time
+import random
+import platform
 
-try:
-    import GPUtil  # Zum Erkennen echter GPUs
-except ImportError:
-    GPUtil = None
+# ---------------------------
+#         GLOBAL SETTINGS
+# ---------------------------
 
-# Farbverlauf-Generator für RGB-Farben
-def rgb_color(r, g, b):
-    return f"\033[38;2;{r};{g};{b}m"
+# Default benchmark duration (seconds)
+benchmark_duration = 3  
 
-RESET = "\033[0m"
+# Default hashing algorithm (choose from "MD5", "SHA1", "SHA256", "SHA512")
+hash_algorithm = "SHA256"
 
-# Farben
-CYAN = rgb_color(0, 255, 255)
-GREEN = rgb_color(0, 255, 0)
-YELLOW = rgb_color(255, 255, 0)
-RED = rgb_color(255, 0, 0)
-BLUE = rgb_color(0, 0, 255)
+# Mapping from a string name to the actual hashlib constructor
+ALGO_FUNCTIONS = {
+    "MD5": hashlib.md5,
+    "SHA1": hashlib.sha1,
+    "SHA256": hashlib.sha256,
+    "SHA512": hashlib.sha512,
+}
 
-# Unterstützte CPU-Algorithmen
-CPU_ALGORITHMS = ["sha256", "sha512", "blake2b", "sha3_256", "md5"]
+# Distances for “If each hash was 1 meter” analogy (in kilometers)
+DISTANCE_REFERENCES = [
+    {"name": "the height of the ISS orbit (~400 km)",             "distance_km": 400},
+    {"name": "the length of Germany N-S (~876 km)",               "distance_km": 876},
+    {"name": "Berlin to Istanbul (~1,738 km)",                    "distance_km": 1738},
+    {"name": "the length of Africa N-S (~8,000 km)",              "distance_km": 8000},
+    {"name": "Earth's equator (~40,075 km)",                      "distance_km": 40075},
+    {"name": "Earth to Moon (~384,400 km)",                       "distance_km": 384400},
+    {"name": "Earth to Sun (~150 million km)",                    "distance_km": 150_000_000},
+    {"name": "Earth to Jupiter (~588 million km)",               "distance_km": 588_000_000},
+    {"name": "Earth to Pluto (~5.9 billion km)",                  "distance_km": 5_900_000_000},
+]
 
-# GPU-Unterstützung
-def detect_gpus():
-    """Erkennt verfügbare GPUs mit GPUtil."""
-    if GPUtil is None:
-        return []
-    gpus = GPUtil.getGPUs()
-    return [gpu.name for gpu in gpus]
+# Some random fun facts
+FUN_FACTS = [
+    "SHA-256 is used by Bitcoin for proof-of-work. ⛏️",
+    "MD5 is old but still widely used for checksums. 🔑",
+    "SHA-1 was once considered secure, but collisions have been found. ⚠️",
+    "Python was named after Monty Python, not the snake. 🐍",
+    "The Earth’s circumference is about 40,075 km at the equator! 🌍",
+    "Distance to the Moon is around 384,400 km – quite a hike! 🌕",
+    "The first computer ‘bug’ was an actual moth found in a relay. 🦋",
+]
 
-GPU_LIST = detect_gpus()
-GPU_ALGORITHMS = ["cuda_sha256", "cuda_sha512"] if GPU_LIST else []
+# ----------------------------------------------------------------
+# EASTER EGG HASH (MD5). The actual password is a 6-letter UPPERCASE word.
+# ----------------------------------------------------------------
+EASTER_EGG_HASH = "454f3567bdf5b94e0f421deac30c5e2d"
 
-# Globale Variablen
-progress = 0
-progress_lock = threading.Lock()
-stop_animation = threading.Event()
+# A small wordlist for the "auto-cracker"
 
-def display_startup_message():
-    """Zeigt die Startnachricht mit Farben und Rahmen."""
-    text = "🌟 Multi-Algorithm Hash Benchmark 🌟"
-    terminal_width = shutil.get_terminal_size().columns
-    border = "═" * (len(text) + 4)
-    padding = (terminal_width - len(border)) // 2
+DICTIONARY = [
+    "BUNNY",  
+    "SPRING",
+    "WINTER",
+    "HOLIDAY",
+    "EASTER", 
+    "SUMMER",
+    "AUTUMN",
+    "FLOWER",
+    "PLANET",
+    "ROCKET",
+    "CANDY",
+]
 
-    for _ in range(3):  # Animation für 3 Wiederholungen
-        os.system("cls" if platform.system() == "Windows" else "clear")
-        print(f"{CYAN}{' ' * padding}╔{border}╗{RESET}")
-        print(f"{CYAN}{' ' * padding}║  {text}  ║{RESET}")
-        print(f"{CYAN}{' ' * padding}╚{border}╝{RESET}")
-        time.sleep(0.5)
+# An ASCII banner for show
+ASCII_BANNER = r"""
+   ___                _           _                  _        
+  / _ \ _ __ ___  ___| |__   ___ | |_   _ _ __   ___| |_ ___  
+ | | | | '__/ _ \/ __| '_ \ / _ \| | | | | '_ \ / __| __/ __| 
+ | |_| | | |  __/\__ \ | | | (_) | | |_| | | | | (__| |_\__ \ 
+  \___/|_|  \___||___/_| |_|\___/|_|\__,_|_| |_|\___|\__|___/ 
 
-def print_normal_border(text):
-    """Zeigt den Text mit einem normalen Rahmen an."""
-    terminal_width = shutil.get_terminal_size().columns
-    border = "═" * (len(text) + 4)
-    padding = (terminal_width - len(border)) // 2
+  ~ A very good Hashing Benchmark Tool 🙃🙃🙃🙃 ~
+"""
 
-    print(f"{GREEN}{' ' * padding}╔{border}╗{RESET}")
-    print(f"{GREEN}{' ' * padding}║  {text}  ║{RESET}")
-    print(f"{GREEN}{' ' * padding}╚{border}╝{RESET}")
+# ---------------------------
+#       CORE BENCHMARK
+# ---------------------------
 
-def print_progress_bar(total_duration, start_time):
-    """Zeigt eine farbige Fortschrittsanzeige an."""
-    bar_length = 50
-    while not stop_animation.is_set():
-        elapsed_time = time.perf_counter() - start_time
-        progress_percentage = min(100, int((elapsed_time / total_duration) * 100))
-        filled_length = int(bar_length * progress_percentage // 100)
-        bar = f"{GREEN}{'█' * filled_length}{RESET}{'-' * (bar_length - filled_length)}"
-        print(f"\r{CYAN}Progress: |{bar}| {progress_percentage}% Complete{RESET}", end="", flush=True)
-        time.sleep(0.1)
-    print("\n")
+def hash_benchmark(algo: str, duration: int):
+    """
+    Perform a hashing benchmark for a given duration using the specified algorithm.
+    :param algo: Algorithm name ("MD5", "SHA1", "SHA256", "SHA512").
+    :param duration: Time in seconds to run the benchmark.
+    :return: (total_hashes, total_time_seconds)
+    """
+    if algo not in ALGO_FUNCTIONS:
+        raise ValueError(f"Unsupported algorithm: {algo}")
 
-def format_hashrate(hashrate):
-    """Formatiert die Hashrate in eine geeignete Einheit."""
-    units = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s"]
-    power = 0
-    while hashrate >= 1000 and power < len(units) - 1:
-        hashrate /= 1000
-        power += 1
-    return f"{hashrate:.2f} {units[power]}"
+    print(f"Starting {algo} hash benchmark for {duration} second(s)... ⚙️⏱️")
+    start_time = time.time()
+    count = 0
+    
+    # Get the hashlib constructor
+    hash_func = ALGO_FUNCTIONS[algo]
+
+    while (time.time() - start_time) < duration:
+        # Just a small piece of data to hash, slightly varied
+        data = b"BenchmarkTestData" + count.to_bytes(4, 'little')
+        _ = hash_func(data).hexdigest()
+        count += 1
+
+    elapsed = time.time() - start_time
+    hps = count / elapsed if elapsed else 0
+    print(f"Completed {count} {algo} hashes in {elapsed:.2f} seconds.")
+    print(f"That’s about {hps:,.0f} hashes per second!\n")
+    return count, elapsed
+
+# ---------------------------
+#    DISTANCE COMPARISON
+# ---------------------------
+
+def distance_analogy(num_hashes: int):
+    """
+    Given the total number of hashes, treat each hash as if it were 1 meter traveled.
+    Convert to kilometers and compare against known distances for a fun analogy.
+    :param num_hashes: total number of hashes performed
+    :return: A string with the distance analogy report
+    """
+    km = num_hashes / 1000.0  # 1 meter per hash => num_hashes / 1000 = kilometers
+
+    message = f"If each hash was 1 meter, you traveled {km:,.2f} km.\n"
+    
+    # Check which milestones we surpassed
+    reached_milestones = []
+    for ref in DISTANCE_REFERENCES:
+        if km >= ref["distance_km"]:
+            reached_milestones.append(ref["name"])
+    
+    if not reached_milestones:
+        message += "🚶 You haven’t reached the first milestone yet. Keep hashing to go further!\n"
+    else:
+        message += "You've gone beyond:\n"
+        for milestone in reached_milestones:
+            message += f" - {milestone}\n"
+        
+        # If you surpassed the last known reference, add a special message
+        if reached_milestones[-1] == DISTANCE_REFERENCES[-1]["name"]:
+            message += "You’ve even surpassed our largest reference! You're unstoppable! 🚀\n"
+
+    return message
+
+# ---------------------------
+#        FUN EXTRAS
+# ---------------------------
+
+def show_fun_fact():
+    """Print out a random fun fact."""
+    fact = random.choice(FUN_FACTS)
+    print("Here’s a fun fact! 🤓")
+    print(f"➡️ {fact}\n")
+
 
 def show_system_info():
-    """Zeigt Informationen über das System an."""
-    gpu_info = ", ".join(GPU_LIST) if GPU_LIST else "No GPU detected"
-    system_info = (
-        f"{YELLOW}Operating System:{RESET} {platform.system()} {platform.release()} ({platform.version()})\n"
-        f"{YELLOW}CPU:{RESET} {platform.processor()}\n"
-        f"{YELLOW}CPU Cores:{RESET} {os.cpu_count()}\n"
-        f"{YELLOW}Python Version:{RESET} {platform.python_version()}\n"
-        f"{YELLOW}Total Memory:{RESET} {psutil.virtual_memory().total / (1024 ** 3):.2f} GB\n"
-        f"{YELLOW}GPU(s):{RESET} {gpu_info}"
-    )
-    print_normal_border("System Information")
-    print(system_info)
+    """Show some basic system information."""
+    print("System Info 🖥️")
+    print(f"Python Version : {platform.python_version()}")
+    print(f"System         : {platform.system()}")
+    print(f"Node           : {platform.node()}")
+    print(f"Release        : {platform.release()}")
+    print(f"Processor      : {platform.processor()}\n")
 
-def display_ascii_menu():
-    """Zeigt das Hauptmenü an."""
-    menu = f"""
-    {CYAN}🌟 Main Menu 🌟{RESET}
-    {YELLOW}1️⃣  Set Benchmark Duration
-    2️⃣  Choose Hash Algorithm
-    3️⃣  Set Number of Threads
-    4️⃣  🚀 Start Single Algorithm Benchmark
-    5️⃣  🌍 Start Multi-Algorithm Benchmark
-    6️⃣  📊 Show Benchmark History
-    7️⃣  💻 Show System Info
-    8️⃣  ❌ Exit{RESET}
+# ---------------------------
+#      SETTINGS MENU
+# ---------------------------
+
+def print_settings_menu():
+    print("""
+╔══════════════════════════════════════════╗
+║             SETTINGS MENU               ║
+╠══════════════════════════════════════════╣
+║ 1) Change Benchmark Duration            ║
+║ 2) Change Hash Algorithm                ║
+║ 3) Back to Main Menu                    ║
+╚══════════════════════════════════════════╝
+""")
+
+
+def settings_menu():
     """
-    print(menu)
-
-def hash_worker(duration, algorithm="sha256"):
-    """Berechnet Hashes für die angegebene Zeit."""
-    global progress
-    start_time = time.perf_counter()
-    hasher = getattr(hashlib, algorithm)()
-    local_progress = 0
-    data = b"0" * 4096
-
-    while time.perf_counter() - start_time < duration:
-        hasher.update(data)
-        hasher.digest()
-        local_progress += 1
-
-    with progress_lock:
-        progress += local_progress
-
-def run_benchmark(algorithm, duration=20, threads=None):
-    """Startet einen Benchmark für einen Algorithmus."""
-    global progress, stop_animation
-    progress = 0
-    stop_animation.clear()
-
-    if threads is None:
-        threads = os.cpu_count()
-
-    start_time = time.perf_counter()
-    progress_thread = threading.Thread(target=print_progress_bar, args=(duration, start_time))
-    progress_thread.start()
-
-    print_normal_border(f"Benchmark: {algorithm.upper()} ({threads} Threads)")
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        futures = [executor.submit(hash_worker, duration, algorithm) for _ in range(threads)]
-        for future in as_completed(futures):
-            future.result()
-
-    elapsed = time.perf_counter() - start_time
-    hashrate = format_hashrate(progress / elapsed)
-    stop_animation.set()
-    progress_thread.join()
-
-    return {
-        "Algorithm": algorithm.upper(),
-        "Duration": f"{elapsed:.2f} seconds",
-        "Total Hashes": progress,
-        "Hashrate": hashrate
-    }
-
-def run_multi_algorithm_benchmark():
-    """Startet einen Benchmark für alle unterstützten Algorithmen."""
-    results = []
-    all_algorithms = CPU_ALGORITHMS + GPU_ALGORITHMS
-    for algorithm in all_algorithms:
-        result = run_benchmark(algorithm)
-        results.append(result)
-
-    print_normal_border("Benchmark Results")
-    for res in results:
-        print(f"{YELLOW}{res}{RESET}")
-
-def main():
-    """Hauptfunktion des Programms."""
-    display_startup_message()  # Zeigt die Startanimation
-
-    benchmark_duration = 20
-    selected_algorithm = "sha256"
-    number_of_threads = os.cpu_count()
+    Allows user to change global benchmark parameters:
+      - benchmark_duration
+      - hash_algorithm
+    """
+    global benchmark_duration, hash_algorithm
 
     while True:
-        display_ascii_menu()
-        choice = input(f"{BLUE}👉 Please choose an option (1-8): {RESET}")
+        print_settings_menu()
+        choice = input("Select an option: ").strip()
 
-        if choice == "1":
-            benchmark_duration = int(input("Enter benchmark duration (seconds): "))
-        elif choice == "2":
-            all_algorithms = CPU_ALGORITHMS + GPU_ALGORITHMS
-            selected_algorithm = input(f"Enter hash algorithm ({', '.join(all_algorithms)}): ").lower()
-            if selected_algorithm not in all_algorithms:
-                print(f"{RED}Invalid algorithm! Defaulting to sha256.{RESET}")
-                selected_algorithm = "sha256"
-        elif choice == "3":
-            number_of_threads = int(input("Enter number of threads: "))
-        elif choice == "4":
-            result = run_benchmark(selected_algorithm, benchmark_duration, number_of_threads)
-            print(f"{GREEN}Result:{RESET} {result}")
-        elif choice == "5":
-            run_multi_algorithm_benchmark()
-        elif choice == "6":
-            print("Feature coming soon.")
-        elif choice == "7":
-            show_system_info()
-        elif choice == "8":
-            print_normal_border("Goodbye!")
+        if choice == '1':
+            # Change benchmark duration
+            new_duration = input("Enter new benchmark duration (in seconds): ").strip()
+            if new_duration.isdigit():
+                benchmark_duration = int(new_duration)
+                print(f"Benchmark duration set to {benchmark_duration} second(s).\n")
+            else:
+                print("Invalid input! Please enter an integer.\n")
+
+        elif choice == '2':
+            # Change hashing algorithm
+            print("Available algorithms:", ", ".join(ALGO_FUNCTIONS.keys()))
+            new_algo = input(f"Enter new hash algorithm (e.g. {hash_algorithm}): ").upper().strip()
+            if new_algo in ALGO_FUNCTIONS:
+                hash_algorithm = new_algo
+                print(f"Hash algorithm set to {hash_algorithm}.\n")
+            else:
+                print(f"Invalid algorithm! Please choose from {', '.join(ALGO_FUNCTIONS.keys())}.\n")
+
+        elif choice == '3':
+            # Return to main menu
             break
         else:
-            print(f"{RED}Invalid choice! Please select a valid option.{RESET}")
+            print("Invalid option! Please try again.\n")
+
+# ---------------------------
+#       EASTER EGG
+# ---------------------------
+
+def manual_crack_easter_egg():
+    """
+    Ask the user for an Easter Egg password guess. Compare the MD5 hash of
+    their guess with the stored hash. If it matches, reveal the secret message.
+    """
+    print("\n🔒 EASTER EGG: Manual Guess 🔒")
+    print("Hint: It's a 6-letter UPPERCASE word often associated with a holiday!\n")
+    user_guess = input("Enter your guess: ").strip().upper()
+
+    hashed_guess = hashlib.md5(user_guess.encode("utf-8")).hexdigest()
+    if hashed_guess == EASTER_EGG_HASH:
+        print("\n✅ Congratulations! You cracked the Easter Egg password!")
+        print("Secret message: 'Can i try o3 please' 🥳\n")
+    else:
+        print("\n❌ Sorry, that's not correct. Keep trying!\n")
+
+def dictionary_crack_easter_egg():
+    """
+    Use a small built-in dictionary to attempt to find the Easter Egg password
+    by comparing MD5 hashes of each word with EASTER_EGG_HASH.
+    """
+    print("\n🔍 EASTER EGG: Dictionary Attack 🔍")
+    print(f"Trying {len(DICTIONARY)} words in our tiny dictionary...\n")
+
+    for word in DICTIONARY:
+        # Convert to uppercase just in case
+        candidate = word.upper()
+        hashed_candidate = hashlib.md5(candidate.encode("utf-8")).hexdigest()
+        if hashed_candidate == EASTER_EGG_HASH:
+            print(f"✅ Found a match! The password is '{candidate}'")
+            print("Secret message: 'Pls can i try o3' 🥳\n")
+            return
+    print("❌ Sorry, no match found in the dictionary!\n")
+
+def print_easter_egg_menu():
+    print("""
+╔══════════════════════════════════════════╗
+║         EASTER EGG CRACKING MENU        ║
+╠══════════════════════════════════════════╣
+║ 1) Manual Guess                         ║
+║ 2) Dictionary Attack                    ║
+║ 3) Back to Main Menu                    ║
+╚══════════════════════════════════════════╝
+""")
+
+def easter_egg_menu():
+    while True:
+        print_easter_egg_menu()
+        choice = input("Select an option: ").strip()
+
+        if choice == '1':
+            manual_crack_easter_egg()
+        elif choice == '2':
+            dictionary_crack_easter_egg()
+        elif choice == '3':
+            break
+        else:
+            print("Invalid option! Please try again.\n")
+
+# ---------------------------
+#         MAIN MENU
+# ---------------------------
+
+def print_main_menu():
+    print("""
+╔════════════════════════════════════════╗
+║               MAIN MENU               ║
+╠════════════════════════════════════════╣
+║ 1) Start Hash Benchmark  ⚙️           ║
+║ 2) Show Fun Fact         🤯           ║
+║ 3) System Info           💻           ║
+║ 4) Settings              ⚒️           ║
+║ 5) Crack Easter Egg      🥚           ║
+║ 6) Exit                  🚪           ║
+╚════════════════════════════════════════╝
+""")
+
+def main():
+    print(ASCII_BANNER)
+    print("Welcome to the Flexible Hashing Benchmark (with crackable Easter Egg)!")
+    print("(Type the menu number to select an option.)\n")
+
+    while True:
+        print_main_menu()
+        choice = input("Your choice: ").strip()
+
+        if choice == '1':
+            # Run the chosen benchmark
+            total_hashes, _ = hash_benchmark(hash_algorithm, benchmark_duration)
+            # Show the distance analogy
+            analysis_msg = distance_analogy(total_hashes)
+            print(analysis_msg)
+
+        elif choice == '2':
+            show_fun_fact()
+
+        elif choice == '3':
+            show_system_info()
+
+        elif choice == '4':
+            settings_menu()
+
+        elif choice == '5':
+            easter_egg_menu()
+
+        elif choice == '6':
+            print("Exiting... Thanks for benchmarking! 👋")
+            break
+
+        else:
+            print("Invalid option! Please try again.\n")
+
+# ---------------------------
+#           RUN
+# ---------------------------
 
 if __name__ == "__main__":
     main()
